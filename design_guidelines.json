@@ -1,0 +1,100 @@
+{
+  "project_info": {
+    "name": "Engraved Word",
+    "app_type": "hybrid_fullstack",
+    "description": "High-precision real-time video workspace and meeting platform. Combines architectural precision and warm tactile typography with cinematic dark-mode video call environments.",
+    "tech_stack": {
+      "framework": "React.js (JavaScript, .js / .jsx files)",
+      "styling": "Tailwind CSS + custom index.css CSS variables",
+      "icons": "lucide-react or @heroicons/react",
+      "toasts": "sonner (located in src/components/ui/sonner.jsx or imported from sonner)"
+    }
+  },
+  "theme_strategy": {
+    "primary_mode": "dark",
+    "background_base": "Deep Obsidian Void (#090A0F)",
+    "surface_cards": "Slate Midnight (#12151E)",
+    "surface_borders": "Precision Charcoal (#262A38)",
+    "brand_accents": {
+      "primary": "Warm Copper / Engraved Amber (#E07A5F)",
+      "primary_hover": "Terracotta Spark (#D06348)",
+      "secondary_gold": "Muted Brass (#D4A373)",
+      "active_green": "Laser Emerald (#10B981)",
+      "destructive_red": "Signal Crimson (#EF4444)"
+    },
+    "forbidden_colors": ["#7351B7", "#1B93A4"]
+  },
+  "typography": {
+    "heading_font": "Outfit, 'Cabinet Grotesk', sans-serif (DO NOT use Inter for headings)",
+    "body_font": "Plus Jakarta Sans, 'Work Sans', sans-serif",
+    "mono_font": "JetBrains Mono, 'Source Code Pro', monospace (For room codes, timers, latencies, participant counts)",
+    "scale": {
+      "h1_hero": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight",
+      "h2_section": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight",
+      "h3_card": "text-xl sm:text-2xl font-medium",
+      "body": "text-sm sm:text-base leading-relaxed text-slate-300",
+      "label_mono": "font-mono text-xs uppercase tracking-widest text-slate-400"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_philosophy": "Generous spacing system (p-6, p-8, p-12) to create breathing room. All containers with borders MUST have interior padding.",
+    "grid_strategy": "The Tetris Grid for landing pages; High-Density Grid for participant video grids and meeting controls.",
+    "border_styles": "1px sharp solid borders with subtle low-opacity colors (border-slate-800/80). Glassmorphism controls: backdrop-blur-xl bg-slate-950/80 border border-slate-800/60."
+  },
+  "component_guidelines": {
+    "landing_page": {
+      "hero_section": "Bold asymmetric layout with headline 'Engraved Word — High-Fidelity Video Meetings', quick room creation card, direct room code join input, live meeting preview mockup.",
+      "features_grid": "3-column bento style with grid borders exposing the precision framework: Zero-lag spatial audio, dynamic tile grid, encrypted room tokens, real-time transcript.",
+      "header_nav": "Sticky glassmorphic top navigation with logo symbol, 'Features', 'Security', 'Host Sign In' modal trigger, and 'Instant Call' primary button."
+    },
+    "pre_join_lobby": {
+      "container": "Split view or centered studio card. Left side: Video feed preview box with mic audio level visualization bar, mirror toggle, camera selector. Right side: Display name input, audio/video device toggles, 'Join Room' CTA button."
+    },
+    "in_meeting_room": {
+      "video_grid": "Adaptive viewport grid (1 to 9+ participants) supporting responsive grid-cols-1 md:grid-cols-2 lg:grid-cols-3. Active speaker border glow (ring-2 ring-amber-500/80). Local video camera preview card (pinned bottom right or integrated).",
+      "control_bar": "Floating bottom pill container: Mic Toggle, Camera Toggle, Screen Share Toggle, Active Participant List toggle (with badge count), Chat Panel toggle, Copy Room Code button, Destructive Leave Call button.",
+      "side_panel": "Collapsible slide-over drawer for Real-Time Text Chat with timestamps + Participant list with host actions (Mute participant, Pin video, Kick participant)."
+    }
+  },
+  "image_urls": {
+    "portraits_for_mock_participants": [
+      {
+        "url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxwb3J0cmFpdCUyMHBlcnNvbnxlbnwwfHx8fDE3OTA2OTE1NTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Participant Avatar 1 - Executive / Speaker",
+        "category": "participant_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1587397845856-e6cf49176c70?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHw0fHxwb3J0cmFpdCUyMHBlcnNvbnxlbnwwfHx8fDE3OTA2OTE1NTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Participant Avatar 2 - Engineer / Host",
+        "category": "participant_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwyfHxwb3J0cmFpdCUyMHBlcnNvbnxlbnwwfHx8fDE3OTA2OTE1NTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Participant Avatar 3 - Designer",
+        "category": "participant_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1506863530036-1efeddceb993?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxwb3J0cmFpdCUyMHBlcnNvbnxlbnwwfHx8fDE3OTA2OTE1NTV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Participant Avatar 4 - Producer",
+        "category": "participant_avatar"
+      }
+    ],
+    "studio_workspace_backgrounds": [
+      {
+        "url": "https://images.unsplash.com/photo-1765371513276-a74f1ecbcf7d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBzdHVkaW8lMjBvZmZpY2V8ZW58MHx8fHwxNzkwNjkxNTU1fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern dark architectural office background for landing hero",
+        "category": "hero_background"
+      }
+    ]
+  },
+  "testing_and_accessibility": {
+    "data_testid_convention": "All interactive elements (buttons, inputs, toggles, chat forms, leave call buttons) MUST include a kebab-case data-testid attribute. Examples: data-testid=\"create-meeting-btn\", data-testid=\"join-room-input\", data-testid=\"toggle-mic-btn\", data-testid=\"toggle-cam-btn\", data-testid=\"send-chat-btn\", data-testid=\"copy-link-btn\".",
+    "contrast_rule": "Ensure minimum 4.5:1 contrast ratio. Never rely on transparent backgrounds for dropdowns or modals."
+  },
+  "instructions_to_main_agent": [
+    "Build full .js / .jsx components for Engraved Word.",
+    "Implement real-time interactive simulation or WebRTC video streaming hooks with local webcam preview (using navigator.mediaDevices.getUserMedia) when available, falling back smoothly to avatar/video cards.",
+    "Include Sonner toast notifications for events like 'Room code copied', 'User joined call', 'Mic muted'.",
+    "Maintain the architectural dark obsidian and copper theme across landing, lobby, and in-call states."
+  ]
+}

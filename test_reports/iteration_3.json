@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 3 (Recording, Active Speaker, Meeting Reminders, Lobby Chat) — Backend 30/30 pytest passed (21 regression + 9 new). Frontend verified via Playwright: Dashboard shows new-meeting-invitees; scheduled meeting with invitees 'a@test.com, b@test.com' created and appears under Upcoming; instant meeting navigates to /j/{code} lobby. In meeting room (as host, waiting_room off) — record-btn present, click starts recording (recording-indicator appears), click again stops and triggers .webm download (filename verified). All controls render: toggle-mic-btn, toggle-cam-btn, toggle-screen-btn, raise-hand-btn, reactions-btn, toggle-participants-btn, toggle-chat-btn, copy-link-btn, leave-call-btn, local-video-tile. Guest waiting-gate screen shows Message the host card with data-testid lobby-chat / lobby-chat-input / lobby-chat-send — chat message sent successfully. Backend: POST/GET/PATCH /api/meetings correctly accept and return invitees (trimmed, empty filtered); PATCH invitees + scheduled_at resets reminder flags; non-host PATCH -> 403. Cron: /api/cron/reminders without/with wrong bearer -> 401; correct bearer -> 200 {ok:true}. Created scheduled meeting ~8min ahead with delivered@resend.dev invitee, triggered cron, and verified both reminder_30_sent + reminder_10_sent set to true in Mongo, and a second cron trigger did not re-flip flags. WS lobby-chat: guest->host from-guest scope with correct from peerId, host->guest from-host scope with text 'one sec'; a second waiting guest cannot route a directed lobby-chat to another waiting peer (only hosts route 'to') — verified Bob received no lobby-chat from Eve.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration3.py", "/app/backend/tests/backend_test.py", "/app/test_reports/pytest/iter3.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PATCH /api/meetings: passing null for scheduled_at is filtered out (still can't clear a schedule). Pre-existing issue.",
+    "GET /api/meetings/{code} (public) omits invitees — intentional (privacy). GET /api/meetings (auth, host-only) includes invitees. OK.",
+    "process_reminders() sends to host+invitees even when scheduled_at is more than 30 min in the future — condition mins<=30 guards it correctly.",
+    "signaling() 'lobby-chat' from a non-host with 'to' is silently dropped (spec-correct) but you may want to nack it for UX debugging.",
+    "useWebRTC init() opens WS after getUserMedia; in the waiting-room+host case seen once during testing the connection appeared to stall on 'Connecting' — could be a flaky media-permission delay in headless Chromium. Retest w/ waiting_room=false worked reliably. Not reproducible on second attempt."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration3.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@engravedword.com / Admin@123 (verified)",
+  "seed_data_creation": "Test meetings created via API/UI with TEST_ prefix and cleaned up in test_cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: python -m pytest backend/tests/ -v -o addopts=''. Iteration 3 tests live in /app/backend/tests/test_iteration3.py and use WEBHOOK_CRON_SECRET from /app/backend/.env plus pymongo for direct flag inspection. Recording download works headless via canvas.captureStream; grant camera+microphone permissions to origin before joining. For guest lobby chat test, hit /j/{code} with no token, fill name input, click 'Join meeting'."
+}

@@ -1,0 +1,8 @@
+crons:
+  - name: meeting-reminders
+    description: "Emails hosts and invitees 30 and 10 minutes before a scheduled meeting starts"
+    cron: "*/15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/reminders"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
