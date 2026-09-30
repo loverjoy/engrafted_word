@@ -1,9 +1,13 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 export const API = `${BACKEND_URL}/api`;
 
-export const WS_BASE = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws`;
+const wsOrigin = BACKEND_URL
+  ? BACKEND_URL.replace(/^http/, "ws")
+  : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
+
+export const WS_BASE = `${wsOrigin}/api/ws`;
 
 const api = axios.create({
   baseURL: API,
