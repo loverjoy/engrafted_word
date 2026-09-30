@@ -80,9 +80,6 @@ agenthub/agents/youtube/db
 .cache/
 .ruff_cache/
 
-# Lockfiles (yarn is the package manager)
-package-lock.json
-
 # Local database preview logs
 mongo.log
 mongo.err
