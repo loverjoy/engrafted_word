@@ -9,26 +9,20 @@ import logging
 import secrets
 import string
 import asyncio
+import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 import bcrypt
 import jwt
-from bson import ObjectId
 from fastapi import (
     FastAPI, APIRouter, HTTPException, Request, Response, Depends,
     WebSocket, WebSocketDisconnect,
 )
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 
-# ---------------------------------------------------------------------------
-# Setup
-# ---------------------------------------------------------------------------
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+import db
 
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
@@ -71,11 +65,10 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
-        if not user:
+        row = await db.pool.fetchrow("SELECT * FROM users WHERE id = $1", payload["sub"])
+        if not row:
             raise HTTPException(status_code=401, detail="User not found")
-        user["id"] = str(user["_id"])
-        user.pop("_id", None)
+        user = dict(row)
         user.pop("password_hash", None)
         return user
     except jwt.ExpiredSignatureError:
@@ -129,17 +122,15 @@ def set_auth_cookie(response: Response, token: str):
 @api_router.post("/auth/register")
 async def register(payload: RegisterInput, response: Response):
     email = payload.email.lower()
-    if await db.users.find_one({"email": email}):
+    if await db.pool.fetchval("SELECT 1 FROM users WHERE email = $1", email):
         raise HTTPException(status_code=400, detail="Email already registered")
-    doc = {
-        "name": payload.name,
-        "email": email,
-        "password_hash": hash_password(payload.password),
-        "role": "host",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    result = await db.users.insert_one(doc)
-    uid = str(result.inserted_id)
+    uid = uuid.uuid4().hex
+    created_at = datetime.now(timezone.utc).isoformat()
+    await db.pool.execute(
+        "INSERT INTO users (id, name, email, password_hash, role, created_at) "
+        "VALUES ($1, $2, $3, $4, 'host', $5)",
+        uid, payload.name, email, hash_password(payload.password), created_at,
+    )
     token = create_access_token(uid, email)
     set_auth_cookie(response, token)
     return {"user": {"id": uid, "name": payload.name, "email": email, "role": "host"}, "token": token}
@@ -148,13 +139,13 @@ async def register(payload: RegisterInput, response: Response):
 @api_router.post("/auth/login")
 async def login(payload: LoginInput, response: Response):
     email = payload.email.lower()
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(payload.password, user["password_hash"]):
+    row = await db.pool.fetchrow("SELECT * FROM users WHERE email = $1", email)
+    if not row or not verify_password(payload.password, row["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    uid = str(user["_id"])
+    uid = row["id"]
     token = create_access_token(uid, email)
     set_auth_cookie(response, token)
-    return {"user": {"id": uid, "name": user["name"], "email": email, "role": user.get("role", "host")},
+    return {"user": {"id": uid, "name": row["name"], "email": email, "role": row.get("role", "host")},
             "token": token}
 
 
@@ -176,7 +167,7 @@ async def me(user: dict = Depends(get_current_user)):
 @api_router.post("/meetings")
 async def create_meeting(payload: MeetingCreate, user: dict = Depends(get_current_user)):
     code = gen_room_code()
-    while await db.meetings.find_one({"code": code}):
+    while await db.pool.fetchval("SELECT 1 FROM meetings WHERE code = $1", code):
         code = gen_room_code()
     doc = {
         "code": code,
@@ -186,11 +177,15 @@ async def create_meeting(payload: MeetingCreate, user: dict = Depends(get_curren
         "scheduled_at": payload.scheduled_at,
         "waiting_room": payload.waiting_room,
         "invitees": [e.strip() for e in (payload.invitees or []) if e.strip()],
-        "reminder_30_sent": False,
-        "reminder_10_sent": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.meetings.insert_one(doc)
+    await db.pool.execute(
+        "INSERT INTO meetings (code, title, host_id, host_name, scheduled_at, waiting_room, invitees, "
+        "reminder_30_sent, reminder_10_sent, created_at) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, FALSE, $8)",
+        doc["code"], doc["title"], doc["host_id"], doc["host_name"], doc["scheduled_at"],
+        doc["waiting_room"], doc["invitees"], doc["created_at"],
+    )
     return {"code": code, "title": doc["title"], "host_name": doc["host_name"],
             "scheduled_at": doc["scheduled_at"], "waiting_room": doc["waiting_room"],
             "invitees": doc["invitees"]}
@@ -198,9 +193,10 @@ async def create_meeting(payload: MeetingCreate, user: dict = Depends(get_curren
 
 @api_router.get("/meetings/{code}")
 async def get_meeting(code: str):
-    m = await db.meetings.find_one({"code": code})
+    m = await db.pool.fetchrow("SELECT * FROM meetings WHERE code = $1", code)
     if not m:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    m = dict(m)
     room = rooms.get(code)
     active = len(room["peers"]) if room else 0
     return {"code": m["code"], "title": m["title"], "host_name": m["host_name"],
@@ -211,9 +207,11 @@ async def get_meeting(code: str):
 
 @api_router.get("/meetings")
 async def my_meetings(user: dict = Depends(get_current_user)):
-    cursor = db.meetings.find({"host_id": user["id"]}).sort("created_at", -1).limit(20)
+    rows = await db.pool.fetch(
+        "SELECT * FROM meetings WHERE host_id = $1 ORDER BY created_at DESC LIMIT 20", user["id"])
     out = []
-    async for m in cursor:
+    for r in rows:
+        m = dict(r)
         room = rooms.get(m["code"])
         out.append({"code": m["code"], "title": m["title"],
                     "created_at": m["created_at"],
@@ -226,10 +224,10 @@ async def my_meetings(user: dict = Depends(get_current_user)):
 
 @api_router.patch("/meetings/{code}")
 async def update_meeting(code: str, payload: MeetingUpdate, user: dict = Depends(get_current_user)):
-    m = await db.meetings.find_one({"code": code})
-    if not m:
+    row = await db.pool.fetchrow("SELECT * FROM meetings WHERE code = $1", code)
+    if not row:
         raise HTTPException(status_code=404, detail="Meeting not found")
-    if m["host_id"] != user["id"]:
+    if row["host_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the host can edit this meeting")
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     if "invitees" in updates:
@@ -238,18 +236,22 @@ async def update_meeting(code: str, payload: MeetingUpdate, user: dict = Depends
         updates["reminder_30_sent"] = False
         updates["reminder_10_sent"] = False
     if updates:
-        await db.meetings.update_one({"code": code}, {"$set": updates})
+        cols = list(updates.keys())
+        set_clause = ", ".join(f"{c} = ${i + 2}" for i, c in enumerate(cols))
+        await db.pool.execute(
+            f"UPDATE meetings SET {set_clause} WHERE code = $1",
+            code, *[updates[c] for c in cols])
     return {"ok": True, **updates}
 
 
 @api_router.delete("/meetings/{code}")
 async def delete_meeting(code: str, user: dict = Depends(get_current_user)):
-    m = await db.meetings.find_one({"code": code})
-    if not m:
+    row = await db.pool.fetchrow("SELECT * FROM meetings WHERE code = $1", code)
+    if not row:
         raise HTTPException(status_code=404, detail="Meeting not found")
-    if m["host_id"] != user["id"]:
+    if row["host_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Only the host can delete this meeting")
-    await db.meetings.delete_one({"code": code})
+    await db.pool.execute("DELETE FROM meetings WHERE code = $1", code)
     return {"ok": True}
 
 
@@ -266,7 +268,9 @@ async def cron_reminders(request: Request):
 
 async def process_reminders():
     now = datetime.now(timezone.utc)
-    async for m in db.meetings.find({"scheduled_at": {"$ne": None}}):
+    rows = await db.pool.fetch("SELECT * FROM meetings WHERE scheduled_at IS NOT NULL")
+    for r in rows:
+        m = dict(r)
         try:
             sched = datetime.fromisoformat(m["scheduled_at"].replace("Z", "+00:00"))
         except Exception:
@@ -276,10 +280,10 @@ async def process_reminders():
         if sched < now:
             continue
         mins = (sched - now).total_seconds() / 60.0
-        host = await db.users.find_one({"_id": ObjectId(m["host_id"])})
+        host_email = await db.pool.fetchval("SELECT email FROM users WHERE id = $1", m["host_id"])
         recipients = []
-        if host and host.get("email"):
-            recipients.append(host["email"])
+        if host_email:
+            recipients.append(host_email)
         recipients += [e for e in m.get("invitees", []) if e]
         recipients = list(dict.fromkeys(recipients))
         if not recipients:
@@ -297,10 +301,12 @@ async def process_reminders():
 
         if mins <= 30 and not m.get("reminder_30_sent"):
             await _send("30 minutes", f"Reminder: {m['title']} starts soon")
-            await db.meetings.update_one({"code": m["code"]}, {"$set": {"reminder_30_sent": True}})
+            await db.pool.execute(
+                "UPDATE meetings SET reminder_30_sent = TRUE WHERE code = $1", m["code"])
         if mins <= 10 and not m.get("reminder_10_sent"):
             await _send("10 minutes", f"Starting soon: {m['title']}")
-            await db.meetings.update_one({"code": m["code"]}, {"$set": {"reminder_10_sent": True}})
+            await db.pool.execute(
+                "UPDATE meetings SET reminder_10_sent = TRUE WHERE code = $1", m["code"])
 
 
 @api_router.get("/")
@@ -383,9 +389,9 @@ async def signaling(websocket: WebSocket, code: str):
         video = bool(data.get("video", True))
         user_id = decode_user_id(data.get("token", ""))
 
-        meeting = await db.meetings.find_one({"code": code})
-        host_id = meeting.get("host_id") if meeting else None
-        waiting_enabled = meeting.get("waiting_room", True) if meeting else False
+        meeting = await db.pool.fetchrow("SELECT * FROM meetings WHERE code = $1", code)
+        host_id = meeting["host_id"] if meeting else None
+        waiting_enabled = meeting["waiting_room"] if meeting else False
         is_host = bool(user_id and host_id and user_id == host_id)
 
         room["waiting"][peer_id] = {"ws": websocket, "name": name, "audio": audio,
@@ -495,22 +501,22 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    await db.users.create_index("email", unique=True)
-    await db.meetings.create_index("code", unique=True)
+    await db.connect()
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@engravedword.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
-    existing = await db.users.find_one({"email": admin_email})
-    if existing is None:
-        await db.users.insert_one({
-            "name": "Admin", "email": admin_email,
-            "password_hash": hash_password(admin_password),
-            "role": "admin", "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email},
-                                  {"$set": {"password_hash": hash_password(admin_password)}})
+    row = await db.pool.fetchrow("SELECT * FROM users WHERE email = $1", admin_email)
+    if row is None:
+        await db.pool.execute(
+            "INSERT INTO users (id, name, email, password_hash, role, created_at) "
+            "VALUES ($1, 'Admin', $2, $3, 'admin', $4)",
+            uuid.uuid4().hex, admin_email, hash_password(admin_password),
+            datetime.now(timezone.utc).isoformat())
+    elif not verify_password(admin_password, row["password_hash"]):
+        await db.pool.execute(
+            "UPDATE users SET password_hash = $1 WHERE email = $2",
+            hash_password(admin_password), admin_email)
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    await db.close()
